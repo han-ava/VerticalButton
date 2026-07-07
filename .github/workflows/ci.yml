@@ -18,21 +18,48 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: List Xcodebuild schemes (for debug)
+      - name: List xcodebuild schemes (debug)
         run: |
-          # For Swift Packages, Xcode generates a package scheme named "<PackageName>-Package".
-          # Listing schemes helps if the scheme name is different in the runner.
           xcodebuild -list -json || true
 
-      - name: Build for iOS Simulator
+      - name: Detect scheme
+        id: detect
         run: |
-          # build the Swift Package using Xcode targeting the iOS Simulator
-          xcodebuild -scheme "VerticalButton-Package" \
+          SCHEME=$(xcodebuild -list -json | python3 - <<'PY'
+import sys,json
+try:
+    j=json.load(sys.stdin)
+except:
+    print("")
+    sys.exit(0)
+schemes=[]
+if isinstance(j.get("workspace"), dict):
+    schemes += j["workspace"].get("schemes", [])
+if isinstance(j.get("project"), dict):
+    schemes += j["project"].get("schemes", [])
+print(schemes[0] if schemes else "")
+PY
+)
+          if [ -z "$SCHEME" ]; then
+            echo "No scheme found via xcodebuild -list -json"
+            exit 1
+          fi
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+
+      - name: Build for iOS Simulator
+        env:
+          SCHEME: ${{ steps.detect.outputs.scheme }}
+        run: |
+          echo "Using scheme: $SCHEME"
+          xcodebuild -scheme "$SCHEME" \
                      -destination 'platform=iOS Simulator,name=iPhone 14,OS=17.0' \
-                     clean build
+                     clean build CODE_SIGNING_ALLOWED=NO
 
       - name: Run tests on iOS Simulator
+        env:
+          SCHEME: ${{ steps.detect.outputs.scheme }}
         run: |
-          # run tests (if there are none this will report no tests)
-          xcodebuild test -scheme "VerticalButton-Package" \
-                          -destination 'platform=iOS Simulator,name=iPhone 14,OS=17.0'
+          echo "Testing scheme: $SCHEME"
+          xcodebuild test -scheme "$SCHEME" \
+                          -destination 'platform=iOS Simulator,name=iPhone 14,OS=17.0' \
+                          CODE_SIGNING_ALLOWED=NO
