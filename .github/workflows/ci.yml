@@ -13,14 +13,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Print Swift version
-        run: swift --version
+      - name: Print Xcode / Swift info
+        run: |
+          xcodebuild -version
+          swift --version
 
-      - name: Resolve Swift Package
-        run: swift package resolve
+      - name: List Xcodebuild schemes (for debug)
+        run: |
+          # For Swift Packages, Xcode generates a package scheme named "<PackageName>-Package".
+          # Listing schemes helps if the scheme name is different in the runner.
+          xcodebuild -list -json || true
 
-      - name: Build
-        run: swift build --configuration release
+      - name: Build for iOS Simulator
+        run: |
+          # build the Swift Package using Xcode targeting the iOS Simulator
+          xcodebuild -scheme "VerticalButton-Package" \
+                     -destination 'platform=iOS Simulator,name=iPhone 14,OS=17.0' \
+                     clean build
 
-      - name: Run tests
-        run: swift test --parallel
+      - name: Run tests on iOS Simulator
+        run: |
+          # run tests (if there are none this will report no tests)
+          xcodebuild test -scheme "VerticalButton-Package" \
+                          -destination 'platform=iOS Simulator,name=iPhone 14,OS=17.0'
