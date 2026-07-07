@@ -53,7 +53,7 @@ jobs:
         run: |
           echo "Using scheme: $SCHEME"
           xcodebuild -scheme "$SCHEME" \
-                     -destination 'platform=iOS Simulator,name=iPhone 14,OS=17.0' \
+                     -destination 'platform=iOS Simulator,name=iPhone 17' \
                      clean build CODE_SIGNING_ALLOWED=NO
 
       - name: Run tests on iOS Simulator
