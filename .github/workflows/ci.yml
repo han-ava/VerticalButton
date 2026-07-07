@@ -127,8 +127,8 @@ jobs:
               echo "Using simulator id: $SIM_ID"
               xcodebuild -scheme "$SCHEME" -destination "id=$SIM_ID" clean build CODE_SIGNING_ALLOWED=NO
             else
-              # try build without explicit destination (will build the scheme's supported platform)
-              xcodebuild -scheme "$SCHEME" clean build CODE_SIGNING_ALLOWED=NO
+              echo "No simulator id available; using generic iOS Simulator destination"
+              xcodebuild -scheme "$SCHEME" -destination "generic/platform=iOS Simulator" clean build CODE_SIGNING_ALLOWED=NO
             fi
           else
             echo "No Xcode scheme detected -- falling back to swift build"
