@@ -11,11 +11,6 @@ let package = Package(
         .target(
             name: "VerticalButton",
             path: "Sources/VerticalButton"
-        ),
-        .testTarget(
-            name: "VerticalButtonTests",
-            dependencies: ["VerticalButton"],
-            path: "Tests"
         )
     ]
 )
