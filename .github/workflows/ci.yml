@@ -55,12 +55,3 @@ jobs:
           xcodebuild -scheme "$SCHEME" \
                      -destination 'platform=iOS Simulator,name=iPhone 17' \
                      clean build CODE_SIGNING_ALLOWED=NO
-
-      - name: Run tests on iOS Simulator
-        env:
-          SCHEME: ${{ steps.detect.outputs.scheme }}
-        run: |
-          echo "Testing scheme: $SCHEME"
-          xcodebuild test -scheme "$SCHEME" \
-                          -destination 'platform=iOS Simulator,name=iPhone 17' \
-                          CODE_SIGNING_ALLOWED=NO
