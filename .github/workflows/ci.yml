@@ -26,32 +26,96 @@ jobs:
       - name: Detect scheme
         id: detect
         run: |
-          cat > detect_scheme.py <<'PY'
-          import json, sys
+          python3 - <<'PY' > /tmp/scheme.out
+          import json,sys
           try:
-              j = json.load(open('schemes.json'))
+              j=json.load(open('schemes.json'))
           except Exception:
               sys.exit(0)
-          schemes = []
+          schemes=[]
           if isinstance(j.get('workspace'), dict):
               schemes += j['workspace'].get('schemes', [])
           if isinstance(j.get('project'), dict):
               schemes += j['project'].get('schemes', [])
           print(schemes[0] if schemes else '')
           PY
-          SCHEME=$(python3 detect_scheme.py)
-          rm -f detect_scheme.py
+          SCHEME=$(cat /tmp/scheme.out)
           if [ -z "$SCHEME" ]; then
-            echo "No scheme found via xcodebuild -list -json"
+            echo "No scheme found via xcodebuild -list -json; ensure you have a shared scheme or Xcode package scheme."
             exit 1
           fi
           echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+          echo "Detected scheme: $SCHEME"
 
-      - name: Build for iOS Simulator
+      - name: Pick an available iOS Simulator (id) with preference
+        id: sim
+        run: |
+          python3 - <<'PY' > /tmp/sim.out
+          import json,sys
+          try:
+              j=json.load(sys.stdin)
+          except Exception:
+              sys.exit(0)
+          # Preferred models in order:
+          prefs = ["iPhone 17","iPhone 17 Pro","iPhone 16","iPhone 16 Pro","iPhone 15","iPhone 14","iPhone SE (3rd generation)","iPhone SE (2nd generation)"]
+          devices = j.get("devices", {})
+          # Flatten and collect available iPhone simulators
+          candidates = []
+          for runtime, devs in devices.items():
+              for d in devs:
+                  if d.get("isAvailable") and "iPhone" in d.get("name",""):
+                      candidates.append((runtime, d.get("name"), d.get("udid")))
+          # Try to pick by prefs
+          udid = ""
+          for p in prefs:
+              for c in candidates:
+                  if p in c[1]:
+                      udid = c[2]
+                      break
+              if udid:
+                  break
+          # fallback: first candidate
+          if not udid and candidates:
+              udid = candidates[0][2]
+          if udid:
+              print(udid)
+          PY
+          SIMID=$(xcrun simctl list devices available -j 2>/dev/null | python3 /tmp/sim.out)
+          if [ -z "$SIMID" ]; then
+            echo "No available iPhone simulator found via simctl; printing full device list for debugging:"
+            xcrun simctl list devices
+            exit 1
+          fi
+          echo "simulator_id=$SIMID" >> $GITHUB_OUTPUT
+          echo "Picked simulator id: $SIMID"
+
+      - name: Build for iOS Simulator (using simulator id)
         env:
           SCHEME: ${{ steps.detect.outputs.scheme }}
+          SIM_ID: ${{ steps.sim.outputs.simulator_id }}
         run: |
           echo "Using scheme: $SCHEME"
+          echo "Using simulator id: $SIM_ID"
           xcodebuild -scheme "$SCHEME" \
-                     -destination 'platform=iOS,name=Any iOS Device' \
+                     -destination "id=$SIM_ID" \
                      clean build CODE_SIGNING_ALLOWED=NO
+
+      - name: Run tests on iOS Simulator (using simulator id) with scheme-check
+        env:
+          SCHEME: ${{ steps.detect.outputs.scheme }}
+          SIM_ID: ${{ steps.sim.outputs.simulator_id }}
+        run: |
+          echo "Testing scheme: $SCHEME on simulator $SIM_ID"
+          xcodebuild test -scheme "$SCHEME" \
+                          -destination "id=$SIM_ID" \
+                          CODE_SIGNING_ALLOWED=NO || {
+            code=$?
+            # 66 = scheme not configured for test action; 70 = no device (shouldn't happen here)
+            if [ "$code" -eq 66 ]; then
+              echo "Scheme '$SCHEME' is not configured for test action; skipping tests."
+              exit 0
+            else
+              echo "xcodebuild test failed with exit code $code"
+              exit $code
+            fi
+          }
