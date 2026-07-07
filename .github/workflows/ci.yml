@@ -20,26 +20,27 @@ jobs:
 
       - name: List xcodebuild schemes (debug)
         run: |
-          xcodebuild -list -json || true
+          xcodebuild -list -json > schemes.json || true
+          cat schemes.json
 
       - name: Detect scheme
         id: detect
         run: |
-          SCHEME=$(xcodebuild -list -json | python3 - <<'PY'
-import sys,json
-try:
-    j=json.load(sys.stdin)
-except:
-    print("")
-    sys.exit(0)
-schemes=[]
-if isinstance(j.get("workspace"), dict):
-    schemes += j["workspace"].get("schemes", [])
-if isinstance(j.get("project"), dict):
-    schemes += j["project"].get("schemes", [])
-print(schemes[0] if schemes else "")
-PY
-)
+          cat > detect_scheme.py <<'PY'
+          import json, sys
+          try:
+              j = json.load(open('schemes.json'))
+          except Exception:
+              sys.exit(0)
+          schemes = []
+          if isinstance(j.get('workspace'), dict):
+              schemes += j['workspace'].get('schemes', [])
+          if isinstance(j.get('project'), dict):
+              schemes += j['project'].get('schemes', [])
+          print(schemes[0] if schemes else '')
+          PY
+          SCHEME=$(python3 detect_scheme.py)
+          rm -f detect_scheme.py
           if [ -z "$SCHEME" ]; then
             echo "No scheme found via xcodebuild -list -json"
             exit 1
